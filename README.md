@@ -70,7 +70,7 @@ npm run bench:contention
 - [x] Double-entry schema, deferred balance triggers, append-only ledger rules, and idempotency table
 - [x] Pessimistic locking (`SELECT ... FOR UPDATE`) with deterministic lock ordering
 - [x] Interactive Express API + React/Tailwind Concurrency Lab dashboard
-- [ ] Optimistic concurrency control (OCC) strategy and hot-row contention benchmark
+- [x] Optimistic concurrency control (OCC) strategy and hot-row contention benchmark
 - [ ] Atomic `Idempotency-Key` middleware (`200` replay, `409` in-flight, `422` payload mismatch)
 - [ ] Jest concurrency barrier suite (50x concurrent withdrawals, 20x bidirectional deadlock test)
 - [ ] `k6` contention script, GitHub Actions CI, and Architecture Decision Records (`docs/adr/`)

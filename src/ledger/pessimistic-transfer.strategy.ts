@@ -1,28 +1,9 @@
 import { Pool, PoolClient } from "pg";
 import { withTransaction } from "../db/pool";
-import {
-  AccountNotFoundError,
-  CurrencyMismatchError,
-  DuplicateReferenceError,
-  InsufficientFundsError,
-} from "../domain/errors";
-import {
-  AccountRecord,
-  TransferInput,
-  TransferResult,
-  TransferStrategy,
-} from "../domain/types";
+import { AccountRecord, TransferInput, TransferResult, TransferStrategy } from "../domain/types";
 import { AccountDbRow, mapAccountRow } from "./account.repository";
+import { insertJournalAndEntries, validateLoadedAccounts } from "./transfer-helpers";
 import { sortAccountIdsForLocking, validateTransferInput } from "./validation";
-
-function isPgUniqueViolation(err: unknown): err is { code: string } {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code: unknown }).code === "23505"
-  );
-}
 
 /**
  * Executes double-entry transfers using PostgreSQL row-level pessimistic locking
@@ -70,47 +51,7 @@ export class PessimisticTransferStrategy implements TransferStrategy {
       byId.set(account.id, account);
     }
 
-    const fromAccount = byId.get(input.fromAccountId);
-    if (!fromAccount) {
-      throw new AccountNotFoundError(input.fromAccountId);
-    }
-
-    const toAccount = byId.get(input.toAccountId);
-    if (!toAccount) {
-      throw new AccountNotFoundError(input.toAccountId);
-    }
-
-    if (fromAccount.currency !== input.currency || toAccount.currency !== input.currency) {
-      throw new CurrencyMismatchError(
-        `Transfer currency ${input.currency} does not match account currencies (${fromAccount.currency}, ${toAccount.currency})`
-      );
-    }
-
-    if (fromAccount.accountType !== "SYSTEM" && fromAccount.balance < input.amount) {
-      throw new InsufficientFundsError(fromAccount.id, fromAccount.balance, input.amount);
-    }
-
-    let txRow: { id: string; created_at: Date } | undefined;
-    try {
-      const txRes = await client.query<{ id: string; created_at: Date }>(
-        `
-        INSERT INTO journal_transactions (reference_id, currency, description)
-        VALUES ($1, $2, $3)
-        RETURNING id, created_at
-        `,
-        [input.referenceId ?? null, input.currency, input.description.trim()]
-      );
-      txRow = txRes.rows[0];
-    } catch (err) {
-      if (input.referenceId && isPgUniqueViolation(err)) {
-        throw new DuplicateReferenceError(input.referenceId);
-      }
-      throw err;
-    }
-
-    if (!txRow) {
-      throw new Error("Failed to insert journal transaction");
-    }
+    const { fromAccount, toAccount } = validateLoadedAccounts(byId, input);
 
     const fromBalanceAfter = fromAccount.balance - input.amount;
     const toBalanceAfter = toAccount.balance + input.amount;
@@ -135,36 +76,16 @@ export class PessimisticTransferStrategy implements TransferStrategy {
       [toAccount.id, toBalanceAfter.toString(), toNextSeq.toString()]
     );
 
-    await client.query(
-      `
-      INSERT INTO ledger_entries (transaction_id, account_id, direction, amount, account_seq, balance_after)
-      VALUES
-        ($1, $2, 'DEBIT', $3, $4, $5),
-        ($1, $6, 'CREDIT', $3, $7, $8)
-      `,
-      [
-        txRow.id,
-        fromAccount.id,
-        input.amount.toString(),
-        fromNextSeq.toString(),
-        fromBalanceAfter.toString(),
-        toAccount.id,
-        toNextSeq.toString(),
-        toBalanceAfter.toString(),
-      ]
-    );
-
-    return {
-      transactionId: txRow.id,
-      fromAccountId: fromAccount.id,
-      toAccountId: toAccount.id,
-      amount: input.amount,
-      currency: input.currency,
+    return insertJournalAndEntries(client, {
+      input,
+      fromAccount,
+      toAccount,
       fromBalanceAfter,
       toBalanceAfter,
+      fromNextSeq,
+      toNextSeq,
       strategy: this.name,
       attempts: 1,
-      createdAt: txRow.created_at,
-    };
+    });
   }
 }
