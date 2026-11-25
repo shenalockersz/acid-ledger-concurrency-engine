@@ -32,7 +32,7 @@ npm run migrate
 ## Build Roadmap
 
 - [x] TypeScript service scaffold, strict ESLint config, and PostgreSQL Docker Compose setup
-- [ ] Double-entry schema, deferred balance triggers, append-only ledger rules, and idempotency table
+- [x] Double-entry schema, deferred balance triggers, append-only ledger rules, and idempotency table
 - [ ] Pessimistic locking (`SELECT ... FOR UPDATE`) with deterministic lock ordering
 - [ ] Optimistic concurrency control (OCC) strategy and hot-row contention benchmark
 - [ ] Atomic `Idempotency-Key` middleware (`200` replay, `409` in-flight, `422` payload mismatch)
