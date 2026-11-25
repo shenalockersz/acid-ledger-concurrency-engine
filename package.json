@@ -1,0 +1,33 @@
+{
+  "name": "acid-ledger-concurrency-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Double-entry financial ledger demonstrating database-enforced invariants, pessimistic vs. optimistic locking, deadlock-free lock ordering, and atomic idempotency keys.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "lint": "eslint \"src/**/*.ts\"",
+    "migrate": "tsx src/db/migrate.ts",
+    "test": "jest"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.3",
+    "pino": "^9.6.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/express": "^5.0.0",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.5",
+    "@types/pg": "^8.11.11",
+    "eslint": "^9.21.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.6",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.25.0"
+  }
+}
