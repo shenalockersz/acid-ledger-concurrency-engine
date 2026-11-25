@@ -78,6 +78,17 @@ export class AccountRepository {
     return mapAccountRow(row);
   }
 
+  async listAccounts(): Promise<AccountRecord[]> {
+    const res = await this.pool.query<AccountDbRow>(
+      `
+      SELECT id, code, currency, account_type, balance, version, seq, created_at, updated_at
+      FROM accounts
+      ORDER BY account_type ASC, code ASC
+      `
+    );
+    return res.rows.map(mapAccountRow);
+  }
+
   async getById(accountId: string): Promise<AccountRecord> {
     const res = await this.pool.query<AccountDbRow>(
       `
