@@ -12,7 +12,9 @@
     "dev:api": "tsx src/api/server.ts",
     "dev:web": "npm --prefix web run dev",
     "bench:contention": "tsx src/benchmarks/contention-benchmark.ts",
-    "test": "jest"
+    "test": "jest tests/unit",
+    "test:integration": "jest tests/integration --runInBand",
+    "test:all": "jest --runInBand"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
