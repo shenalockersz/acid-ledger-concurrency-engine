@@ -57,3 +57,23 @@ export class OptimisticLockConflictError extends LedgerError {
     );
   }
 }
+
+export class IdempotencyPayloadMismatchError extends LedgerError {
+  constructor(idempotencyKey: string) {
+    super(
+      `Idempotency-Key '${idempotencyKey}' was already used with a different request payload`,
+      "IDEMPOTENCY_PAYLOAD_MISMATCH",
+      422
+    );
+  }
+}
+
+export class IdempotencyInProgressError extends LedgerError {
+  constructor(idempotencyKey: string) {
+    super(
+      `Request with Idempotency-Key '${idempotencyKey}' is currently in progress`,
+      "IDEMPOTENCY_IN_PROGRESS",
+      409
+    );
+  }
+}

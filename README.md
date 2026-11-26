@@ -71,6 +71,6 @@ npm run bench:contention
 - [x] Pessimistic locking (`SELECT ... FOR UPDATE`) with deterministic lock ordering
 - [x] Interactive Express API + React/Tailwind Concurrency Lab dashboard
 - [x] Optimistic concurrency control (OCC) strategy and hot-row contention benchmark
-- [ ] Atomic `Idempotency-Key` middleware (`200` replay, `409` in-flight, `422` payload mismatch)
+- [x] Atomic `Idempotency-Key` middleware (`200` replay, `409` in-flight, `422` payload mismatch)
 - [ ] Jest concurrency barrier suite (50x concurrent withdrawals, 20x bidirectional deadlock test)
 - [ ] `k6` contention script, GitHub Actions CI, and Architecture Decision Records (`docs/adr/`)

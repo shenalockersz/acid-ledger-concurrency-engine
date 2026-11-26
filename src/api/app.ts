@@ -3,8 +3,10 @@ import { Pool } from "pg";
 import { z, ZodError } from "zod";
 import { InsufficientFundsError, LedgerError } from "../domain/errors";
 import { AccountRecord } from "../domain/types";
+import { IdempotencyService } from "../idempotency/idempotency.service";
 import { AccountRepository } from "../ledger/account.repository";
 import { PessimisticTransferStrategy } from "../ledger/pessimistic-transfer.strategy";
+import { TransferService } from "../ledger/transfer.service";
 import { formatMinorUnits, summarizeLatencies } from "./metrics";
 
 const transferBodySchema = z.object({
@@ -14,6 +16,7 @@ const transferBodySchema = z.object({
   currency: z.string().regex(/^[A-Z]{3}$/),
   description: z.string().trim().min(1),
   referenceId: z.string().trim().min(1).optional(),
+  strategy: z.enum(["pessimistic", "optimistic"]).default("pessimistic"),
 });
 
 const raceWithdrawalsBodySchema = z.object({
@@ -88,6 +91,8 @@ export function createApp(pool: Pool): express.Express {
   const app = express();
   const repo = new AccountRepository(pool);
   const strategy = new PessimisticTransferStrategy(pool);
+  const transferService = new TransferService(pool);
+  const idempotency = new IdempotencyService(pool);
 
   app.use(express.json());
 
@@ -160,27 +165,61 @@ export function createApp(pool: Pool): express.Express {
     "/api/transfers",
     asyncHandler(async (req, res) => {
       const body = transferBodySchema.parse(req.body);
-      const result = await strategy.transfer({
-        fromAccountId: body.fromAccountId,
-        toAccountId: body.toAccountId,
-        amount: body.amount,
-        currency: body.currency,
-        description: body.description,
-        referenceId: body.referenceId,
-      });
+      const executeTransfer = async () => {
+        const result = await transferService.transfer(
+          {
+            fromAccountId: body.fromAccountId,
+            toAccountId: body.toAccountId,
+            amount: body.amount,
+            currency: body.currency,
+            description: body.description,
+            referenceId: body.referenceId,
+          },
+          body.strategy
+        );
 
-      res.status(201).json({
-        transactionId: result.transactionId,
-        fromAccountId: result.fromAccountId,
-        toAccountId: result.toAccountId,
-        amount: result.amount.toString(),
-        currency: result.currency,
-        fromBalanceAfter: result.fromBalanceAfter.toString(),
-        toBalanceAfter: result.toBalanceAfter.toString(),
-        strategy: result.strategy,
-        attempts: result.attempts,
-        createdAt: result.createdAt.toISOString(),
-      });
+        return {
+          statusCode: 201,
+          body: {
+            transactionId: result.transactionId,
+            fromAccountId: result.fromAccountId,
+            toAccountId: result.toAccountId,
+            amount: result.amount.toString(),
+            currency: result.currency,
+            fromBalanceAfter: result.fromBalanceAfter.toString(),
+            toBalanceAfter: result.toBalanceAfter.toString(),
+            strategy: result.strategy,
+            attempts: result.attempts,
+            createdAt: result.createdAt.toISOString(),
+          },
+        };
+      };
+
+      const idempotencyKey = req.header("Idempotency-Key")?.trim();
+      if (idempotencyKey && idempotencyKey.length > 0) {
+        const tenantId = req.header("X-Tenant-Id")?.trim() || "default";
+        const outcome = await idempotency.execute({
+          tenantId,
+          route: "POST /api/transfers",
+          idempotencyKey,
+          payload: {
+            fromAccountId: body.fromAccountId,
+            toAccountId: body.toAccountId,
+            amount: body.amount,
+            currency: body.currency,
+            description: body.description,
+            referenceId: body.referenceId ?? null,
+            strategy: body.strategy,
+          },
+          execute: executeTransfer,
+        });
+        res.setHeader("X-Idempotency-Replayed", String(outcome.replayed));
+        res.status(outcome.statusCode).json(outcome.body);
+        return;
+      }
+
+      const outcome = await executeTransfer();
+      res.status(outcome.statusCode).json(outcome.body);
     })
   );
 
