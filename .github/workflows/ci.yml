@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: acid_ledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d acid_ledger"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      PORT: 3000
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/acid_ledger
+      DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/acid_ledger
+      LOG_LEVEL: warn
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+
+      - name: Typecheck, lint, and build backend
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run build
+
+      - name: Build frontend
+        run: npm --prefix web run build
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Run PostgreSQL migrations
+        run: npm run migrate
+
+      - name: Run PostgreSQL concurrency integration suite
+        run: npm run test:integration
